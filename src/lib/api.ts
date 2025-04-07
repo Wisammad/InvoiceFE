@@ -34,6 +34,7 @@ export interface InvoiceData {
   currency?: FieldData;
   line_items: LineItem[];
   raw_text?: string;
+  extractor_used?: string;
   [key: string]: any; // Allow for additional fields
 }
 
@@ -43,6 +44,13 @@ export interface UploadResponse {
   filename: string;
   status: string;
   message: string;
+}
+
+// Extractor configuration interface
+export interface ExtractorConfig {
+  current_extractor: string;
+  is_enhanced: boolean;
+  message?: string;
 }
 
 // Upload file to the server
@@ -130,6 +138,57 @@ export async function searchDocuments(params: SearchParams): Promise<InvoiceData
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to search documents');
+  }
+  
+  return response.json();
+}
+
+// Get the current extractor configuration
+export async function getExtractorConfig(): Promise<ExtractorConfig> {
+  const response = await fetch(`${API_BASE_URL}/extractor`);
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to get extractor configuration');
+  }
+  
+  return response.json();
+}
+
+// Toggle the extractor mode
+export async function toggleExtractor(): Promise<ExtractorConfig> {
+  const response = await fetch(`${API_BASE_URL}/extractor`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action: 'toggle' }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to toggle extractor mode');
+  }
+  
+  return response.json();
+}
+
+// Set the extractor mode explicitly
+export async function setExtractorMode(useEnhanced: boolean): Promise<ExtractorConfig> {
+  const response = await fetch(`${API_BASE_URL}/extractor`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ 
+      action: 'set',
+      use_enhanced: useEnhanced 
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to set extractor mode');
   }
   
   return response.json();

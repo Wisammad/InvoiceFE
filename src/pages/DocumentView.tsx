@@ -21,124 +21,143 @@ import { InvoiceDetails } from '@/components/document/InvoiceDetails';
 import { toast } from 'sonner';
 import { getDocument, InvoiceData, getFileUrl } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
+import { Badge } from '@/components/ui/badge';
 
 const DocumentView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState('extracted');
-  const [editMode, setEditMode] = useState(false);
+  const navigate = useNavigate();
   const [data, setData] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('extracted');
+  const [editMode, setEditMode] = useState(false);
   const { toast: showToast } = useToast();
-  const navigate = useNavigate();
   
   useEffect(() => {
-    if (id) {
-      fetchDocument(id);
-    }
+    if (!id) return;
+    
+    const fetchDocument = async () => {
+      try {
+        setLoading(true);
+        const document = await getDocument(id);
+        setData(document);
+        setError(null);
+      } catch (error) {
+        console.error('Error fetching document:', error);
+        setError('Failed to load document');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchDocument();
   }, [id]);
   
-  const fetchDocument = async (documentId: string) => {
-    try {
-      setLoading(true);
-      const documentData = await getDocument(documentId);
-      setData(documentData);
-    } catch (error) {
-      console.error('Error fetching document:', error);
-      showToast({
-        title: 'Error',
-        description: 'Failed to load document. It may have been deleted or does not exist.',
-        variant: 'destructive'
-      });
-      navigate('/search');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const handleCopyToClipboard = () => {
-    if (data) {
-      navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-      toast.success('Invoice data copied to clipboard');
-    }
-  };
-  
-  // Fix: Properly type the field parameter as keyof InvoiceData
-  const handleEdit = (field: keyof InvoiceData, value: string) => {
+  const handleEdit = (field: string, value: string) => {
     if (!data) return;
     
-    // Only update if the field is a FieldData object
-    if (typeof data[field] === 'object' && 'value' in data[field] && !Array.isArray(data[field])) {
-      setData(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          [field]: {
-            ...(prev[field] as any),
-            value
-          }
-        };
-      });
-    }
+    // Create a new data object with the edited field
+    const newData = { 
+      ...data,
+      [field]: {
+        ...data[field],
+        value,
+      }
+    };
+    
+    setData(newData);
+    
+    // In a real app, we would send this to the backend
+    toast.success(`Field '${field}' updated`, {
+      description: `Changed to: ${value}`
+    });
+  };
+  
+  const toggleEditMode = () => {
+    setEditMode(!editMode);
+  };
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('Copied to clipboard');
+    }).catch(err => {
+      console.error('Could not copy text: ', err);
+      toast.error('Failed to copy to clipboard');
+    });
   };
   
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
         <p className="text-muted-foreground">Loading document...</p>
       </div>
     );
   }
   
-  if (!data) {
+  if (error || !data) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <AlertTriangle className="h-8 w-8 text-destructive mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Document Not Found</h2>
-        <p className="text-muted-foreground mb-4">The document you're looking for doesn't exist or has been deleted.</p>
-        <Button asChild>
-          <Link to="/search">Back to Search</Link>
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <AlertTriangle className="w-10 h-10 text-destructive mb-4" />
+        <h2 className="text-lg font-semibold mb-2">Document Not Found</h2>
+        <p className="text-muted-foreground mb-6">{error || 'Unable to load document'}</p>
+        <Button variant="outline" onClick={() => navigate(-1)}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Go Back
         </Button>
       </div>
     );
   }
   
+  const jsonContent = JSON.stringify(data, null, 2);
+  
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <Link to="/search" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2">
+    <div className="container py-6 max-w-screen-xl space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft className="mr-1 h-4 w-4" />
-            Back to Search
-          </Link>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileText className="h-6 w-6" />
-            Invoice: {data.invoice_number?.value || 'Unknown'}
+            Back
+          </Button>
+          <h1 className="text-2xl font-bold">
+            {data.invoice_number?.value 
+              ? `Invoice ${data.invoice_number.value}` 
+              : 'Document Details'
+            }
           </h1>
+          {data.extractor_used && (
+            <Badge variant="outline" className="ml-2">
+              <Info className="h-3 w-3 mr-1" />
+              {data.extractor_used}
+            </Badge>
+          )}
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleCopyToClipboard}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copy JSON
-          </Button>
-          <Button variant="outline" asChild>
-            <a href={getFileUrl(data.filename)} target="_blank" rel="noopener noreferrer">
-              <Download className="mr-2 h-4 w-4" />
-              Download
-            </a>
-          </Button>
-          <Button onClick={() => setEditMode(!editMode)}>
+        
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={toggleEditMode}
+          >
             {editMode ? (
               <>
-                <Check className="mr-2 h-4 w-4" />
-                Save Changes
+                <Check className="mr-1 h-4 w-4" />
+                Done
               </>
             ) : (
               <>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Data
+                <Edit className="mr-1 h-4 w-4" />
+                Edit
               </>
             )}
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => copyToClipboard(jsonContent)}
+          >
+            <Copy className="mr-1 h-4 w-4" />
+            Copy JSON
           </Button>
         </div>
       </div>
@@ -162,6 +181,11 @@ const DocumentView: React.FC = () => {
               <CardTitle>Data Extraction Results</CardTitle>
               <CardDescription>
                 Key information extracted from the invoice
+                {data.extractor_used && (
+                  <div className="text-xs mt-1">
+                    Processed with <span className="font-semibold">{data.extractor_used}</span>
+                  </div>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -257,59 +281,30 @@ const DocumentView: React.FC = () => {
                       )}
                     </div>
                     
-                    {data.subtotal && data.tax_amount && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FieldDisplay 
-                          label="Subtotal" 
-                          value={data.subtotal.value} 
-                          confidence={data.subtotal.confidence}
-                          editable={editMode}
-                          onEdit={(value) => handleEdit('subtotal', value)}
-                        />
-                        
-                        <FieldDisplay 
-                          label="Tax" 
-                          value={data.tax_amount.value} 
-                          confidence={data.tax_amount.confidence}
-                          editable={editMode}
-                          onEdit={(value) => handleEdit('tax_amount', value)}
-                        />
-                      </div>
-                    )}
-                    
+                    {/* Display line items if available */}
                     {data.line_items && data.line_items.length > 0 && (
-                      <div className="pt-4">
-                        <h3 className="text-lg font-medium mb-2">Line Items</h3>
-                        <InvoiceDetails 
-                          items={data.line_items} 
-                          editable={editMode} 
-                          subtotal={data.subtotal?.value}
-                          tax={data.tax_amount?.value}
-                          total={data.total_amount?.value}
-                        />
+                      <div className="mt-6">
+                        <h3 className="text-lg font-semibold mb-3">Line Items</h3>
+                        <InvoiceDetails items={data.line_items} />
                       </div>
                     )}
                   </div>
                 </TabsContent>
                 
                 <TabsContent value="raw" className="pt-4">
-                  <Card className="border bg-muted/50">
-                    <CardContent className="pt-6">
-                      <pre className="text-xs whitespace-pre-wrap">
-                        {data.raw_text || 'No raw text available'}
-                      </pre>
-                    </CardContent>
-                  </Card>
+                  <div className="bg-muted p-4 rounded-md">
+                    <pre className="whitespace-pre-wrap text-sm">
+                      {data.raw_text || 'No raw text available.'}
+                    </pre>
+                  </div>
                 </TabsContent>
                 
                 <TabsContent value="json" className="pt-4">
-                  <Card className="border bg-muted/50">
-                    <CardContent className="pt-6">
-                      <pre className="text-xs whitespace-pre-wrap overflow-auto">
-                        {JSON.stringify(data, null, 2)}
-                      </pre>
-                    </CardContent>
-                  </Card>
+                  <div className="bg-muted p-4 rounded-md overflow-auto max-h-[600px]">
+                    <pre className="text-sm font-mono">
+                      {jsonContent}
+                    </pre>
+                  </div>
                 </TabsContent>
               </Tabs>
             </CardContent>

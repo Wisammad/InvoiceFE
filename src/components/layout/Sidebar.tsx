@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { BarChart3, FileUp, Menu, Search, Zap } from 'lucide-react';
+import { BarChart3, FileUp, Menu, Search, Zap, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const Sidebar: React.FC = () => {
@@ -52,6 +51,12 @@ export const Sidebar: React.FC = () => {
             to="/search"
             icon={<Search size={20} />}
             label="Search"
+            collapsed={collapsed}
+          />
+          <NavItem 
+            to="/settings"
+            icon={<Settings size={20} />}
+            label="Settings"
             collapsed={collapsed}
           />
         </ul>
